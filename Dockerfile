@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1-devel-ubuntu20.04
+FROM nvidia/cuda:11.8-devel-ubuntu22.04
 
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
