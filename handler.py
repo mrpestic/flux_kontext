@@ -13,7 +13,7 @@ import uvicorn
 import asyncio
 import numpy as np
 
-# Импорт FLUX из официального репозитория
+# Импорт FLUX из локального кода
 from flux import FluxKontextPipeline
 
 # Настройка логирования

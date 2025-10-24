@@ -16,11 +16,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Установка FLUX из официального репозитория
-RUN pip3 install git+https://github.com/black-forest-labs/flux.git
-
 # Копирование исходного кода
 COPY . .
+
+# Установка FLUX из локального кода
+RUN pip3 install -e .
 
 # Установка переменных окружения
 ENV PYTHONPATH=/app
