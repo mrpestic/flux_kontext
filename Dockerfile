@@ -4,9 +4,12 @@ FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-dev \
+    python3-setuptools \
     git \
     wget \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Создание рабочей директории
@@ -19,8 +22,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Копирование исходного кода
 COPY . .
 
-# Установка FLUX из локального кода
-RUN pip3 install -e .
+# Установка FLUX как обычный пакет
+RUN pip3 install --no-cache-dir --no-deps ./flux/
 
 # Установка переменных окружения
 ENV PYTHONPATH=/app
