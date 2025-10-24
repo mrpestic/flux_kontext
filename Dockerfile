@@ -22,11 +22,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Копирование исходного кода
 COPY . .
 
-# Установка FLUX из корневой директории
-RUN pip3 install --no-cache-dir --no-deps .
-
 # Установка переменных окружения
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
 # Открытие порта для RunPod
