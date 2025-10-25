@@ -65,7 +65,7 @@ async def load_pipeline():
         # Используем официальный API FLUX
         pipeline = FluxKontextPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-Kontext-dev",
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="cuda",
             use_auth_token=hf_token
         )
