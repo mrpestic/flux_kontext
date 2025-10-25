@@ -39,7 +39,17 @@ class ImageEditResponse(BaseModel):
     processing_time: Optional[float] = None
     seeds_used: List[int] = []
 
-app = FastAPI(title="FLUX.1 Kontext API", version="1.0.0")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await load_pipeline()
+    yield
+    # Shutdown
+    pass
+
+app = FastAPI(title="FLUX.1 Kontext API", version="1.0.0", lifespan=lifespan)
 
 async def load_pipeline():
     """Загрузка пайплайна FLUX.1 Kontext"""
@@ -56,7 +66,7 @@ async def load_pipeline():
         pipeline = FluxKontextPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-Kontext-dev",
             torch_dtype=torch.bfloat16,
-            device_map="auto",
+            device_map="cuda",
             use_auth_token=hf_token
         )
         
@@ -93,10 +103,7 @@ def image_to_base64(image: Image.Image) -> str:
     img_str = base64.b64encode(buffer.getvalue()).decode()
     return img_str
 
-@app.on_event("startup")
-async def startup_event():
-    """Инициализация при запуске"""
-    await load_pipeline()
+# Startup event заменен на lifespan в определении app
 
 @app.get("/")
 async def root():
