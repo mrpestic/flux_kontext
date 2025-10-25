@@ -13,8 +13,8 @@ import uvicorn
 import asyncio
 import numpy as np
 
-# Импорт FLUX из локального кода
-from flux import FluxKontextPipeline
+# Импорт FLUX из diffusers
+from diffusers import FluxKontextPipeline
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
