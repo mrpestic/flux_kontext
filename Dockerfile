@@ -26,5 +26,4 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# Команда запуска для RunPod Serverless
-CMD ["python3", "-c", "import handler; print('Handler loaded')"]
+# RunPod Serverless сам вызывает handler(event), CMD не нужен
