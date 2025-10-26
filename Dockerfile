@@ -26,8 +26,5 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# Проброс порта
-EXPOSE 8000
-
-# Запуск Flask сервера
+# Запуск RunPod serverless handler
 CMD ["python3", "handler.py"]
