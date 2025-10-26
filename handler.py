@@ -95,3 +95,27 @@ def handler(event):
         return {"output": {"error": str(e)}}
 
 
+# HTTP сервер для RunPod Serverless
+from flask import Flask, request, jsonify
+app = Flask(__name__)
+
+@app.route('/rpc/v0', methods=['POST'])
+def rpc_v0():
+    """RunPod Serverless HTTP endpoint"""
+    try:
+        data = request.json
+        result = handler(data)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"RPC error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check"""
+    return jsonify({"status": "ok"})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
+
+

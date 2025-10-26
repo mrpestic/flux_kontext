@@ -26,4 +26,8 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# RunPod Serverless сам вызывает handler(event), CMD не нужен
+# Проброс порта
+EXPOSE 8000
+
+# Запуск Flask сервера
+CMD ["python3", "handler.py"]
