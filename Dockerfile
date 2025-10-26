@@ -26,5 +26,8 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# Запуск RunPod serverless handler
-CMD ["python3", "handler.py"]
+# Делаем entrypoint.sh исполняемым и запускаем его
+RUN chmod +x /app/entrypoint.sh
+
+# Запуск через entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

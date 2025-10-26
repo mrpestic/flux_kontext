@@ -11,24 +11,15 @@ from diffusers import FluxKontextPipeline
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Глобальный пайплайн - загружаем при импорте модуля
 pipeline = None
 
 def get_pipeline():
-    """Ленивая загрузка пайплайна"""
+    """Получаем предзагруженный пайплайн"""
     global pipeline
     if pipeline is None:
-        logger.info("Загрузка FLUX.1 Kontext пайплайна...")
-        hf_token = os.getenv("HF_TOKEN")
-        if not hf_token:
-            raise ValueError("HF_TOKEN не найден")
-        
-        pipeline = FluxKontextPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-Kontext-dev",
-            torch_dtype=torch.bfloat16,
-            use_auth_token=hf_token,
-            low_cpu_mem_usage=True
-        ).to("cuda")
-        logger.info("Пайплайн загружен!")
+        logger.error("❌ Пайплайн не загружен!")
+        raise RuntimeError("Pipeline not initialized")
     return pipeline
 
 def load_image_from_base64(image_base64: str) -> Image.Image:
@@ -62,7 +53,7 @@ def handler(event):
         guidance_scale = input_data.get("guidance_scale", 2.5)
         num_inference_steps = input_data.get("num_inference_steps", 20)
         
-        # Ленивая загрузка модели
+        # Получаем предзагруженный пайплайн
         pipe = get_pipeline()
         
         # Загрузка и обработка изображения
@@ -96,9 +87,23 @@ def handler(event):
         return {"output": {"error": str(e)}}
 
 
-# Инициализируем модель при импорте
-logger.info("🚀 Инициализируем RunPod handler...")
-get_pipeline()
+# ЗАГРУЗКА ПАЙПЛАЙНА ПРИ ИМПОРТЕ МОДУЛЯ
+# Это выполнится ОДИН РАЗ при старте воркера
+logger.info("🚀 Загрузка FLUX.1 Kontext пайплайна...")
+hf_token = os.getenv("HF_TOKEN")
+if not hf_token:
+    raise ValueError("HF_TOKEN не найден в переменных окружения")
+
+logger.info("📥 Загружаем модель в GPU...")
+pipeline = FluxKontextPipeline.from_pretrained(
+    "black-forest-labs/FLUX.1-Kontext-dev",
+    torch_dtype=torch.bfloat16,
+    use_auth_token=hf_token,
+    low_cpu_mem_usage=True
+).to("cuda")
+
+logger.info("✅ Пайплайн загружен в GPU память!")
+logger.info("🎯 Handler готов к работе, запускаем RunPod serverless...")
 
 # Запускаем RunPod serverless
 if __name__ == "__main__":
