@@ -6,10 +6,15 @@ import random
 import os
 from PIL import Image
 from diffusers import FluxKontextPipeline
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Dict, Any
+import uvicorn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+app = FastAPI()
 pipeline = None
 
 def load_pipeline():
@@ -97,5 +102,17 @@ async def handler(job):
         }
     except Exception as e:
         return {"output": {"error": str(e)}}
+
+class JobInput(BaseModel):
+    input: Dict[str, Any]
+
+@app.post("/")
+async def runpod_endpoint(job: JobInput):
+    """RunPod endpoint"""
+    result = await handler(job.dict())
+    return result
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
