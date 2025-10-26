@@ -26,8 +26,5 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# Открытие порта
-EXPOSE 8000
-
-# Команда запуска
-CMD ["python3", "handler.py"]
+# Команда запуска для RunPod Serverless
+CMD ["python3", "-c", "import handler; print('Handler loaded')"]

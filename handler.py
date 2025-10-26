@@ -6,21 +6,16 @@ import random
 import os
 from PIL import Image
 from diffusers import FluxKontextPipeline
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import Dict, Any
-import uvicorn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 pipeline = None
 
-def load_pipeline():
-    """Загрузка пайплайна FLUX.1 Kontext"""
+def get_pipeline():
+    """Ленивая загрузка пайплайна"""
     global pipeline
-    try:
+    if pipeline is None:
         logger.info("Загрузка FLUX.1 Kontext пайплайна...")
         hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
@@ -33,9 +28,7 @@ def load_pipeline():
             low_cpu_mem_usage=True
         )
         logger.info("Пайплайн загружен!")
-    except Exception as e:
-        logger.error(f"Ошибка загрузки: {e}")
-        raise e
+    return pipeline
 
 def load_image_from_base64(image_base64: str) -> Image.Image:
     """Загрузка изображения из base64"""
@@ -53,19 +46,13 @@ def image_to_base64(image: Image.Image) -> str:
     image.save(buffer, format='PNG')
     return base64.b64encode(buffer.getvalue()).decode()
 
-# Загрузка при импорте
-load_pipeline()
-
-async def handler(job):
+def handler(event):
     """Основной handler для RunPod"""
     import time
     start_time = time.time()
     
     try:
-        if pipeline is None:
-            return {"error": "Пайплайн не загружен"}
-        
-        input_data = job.get("input", {})
+        input_data = event.get("input", {})
         image_base64 = input_data.get("image_base64")
         prompt = input_data.get("prompt")
         num_images = input_data.get("num_images", 1)
@@ -73,6 +60,9 @@ async def handler(job):
         height = input_data.get("height", 1024)
         guidance_scale = input_data.get("guidance_scale", 2.5)
         num_inference_steps = input_data.get("num_inference_steps", 20)
+        
+        # Ленивая загрузка модели
+        pipe = get_pipeline()
         
         # Загрузка и обработка изображения
         input_image = load_image_from_base64(image_base64)
@@ -83,7 +73,7 @@ async def handler(job):
         for i in range(num_images):
             seed = random.randint(0, 2**32 - 1)
             torch.manual_seed(seed)
-            result = pipeline(
+            result = pipe(
                 image=input_image,
                 prompt=prompt,
                 guidance_scale=guidance_scale,
@@ -101,18 +91,7 @@ async def handler(job):
             }
         }
     except Exception as e:
+        logger.error(f"Ошибка: {e}")
         return {"output": {"error": str(e)}}
-
-class JobInput(BaseModel):
-    input: Dict[str, Any]
-
-@app.post("/")
-async def runpod_endpoint(job: JobInput):
-    """RunPod endpoint"""
-    result = await handler(job.dict())
-    return result
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
