@@ -26,7 +26,7 @@ def get_pipeline():
             torch_dtype=torch.bfloat16,
             use_auth_token=hf_token,
             low_cpu_mem_usage=True
-        )
+        ).to("cuda")
         logger.info("Пайплайн загружен!")
     return pipeline
 
