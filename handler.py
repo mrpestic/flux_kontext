@@ -66,12 +66,9 @@ async def load_pipeline():
         pipeline = FluxKontextPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-Kontext-dev",
             dtype=torch.bfloat16,
-            device_map="cuda",
             use_auth_token=hf_token
         )
         
-        # Перемещаем на GPU
-        pipeline.to("cuda")
         logger.info("Пайплайн успешно загружен!")
     except Exception as e:
         logger.error(f"Ошибка загрузки пайплайна: {e}")
