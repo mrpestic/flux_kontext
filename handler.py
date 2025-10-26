@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 # Глобальная переменная для пайплайна
 pipeline = None
 
+class RunPodInput(BaseModel):
+    input: Dict[str, Any]
+
 class ImageEditRequest(BaseModel):
     image_base64: str
     prompt: str
@@ -117,6 +120,85 @@ async def health_check():
             content={"status": "unhealthy", "message": "Пайплайн не загружен"}
         )
     return {"status": "healthy", "message": "Сервис работает"}
+
+@app.post("/runsync")
+async def runpod_handler(request: RunPodInput):
+    """RunPod синхронный эндпоинт"""
+    import time
+    start_time = time.time()
+    
+    try:
+        if pipeline is None:
+            return {"output": {"error": "Пайплайн не загружен"}}
+        
+        # Извлекаем параметры из input
+        input_data = request.input
+        image_base64 = input_data.get("image_base64")
+        prompt = input_data.get("prompt")
+        num_images = input_data.get("num_images", 1)
+        width = input_data.get("width", 1024)
+        height = input_data.get("height", 1024)
+        guidance_scale = input_data.get("guidance_scale", 2.5)
+        num_inference_steps = input_data.get("num_inference_steps", 20)
+        
+        # Валидация параметров
+        if num_images < 1 or num_images > 10:
+            return {"output": {"error": "Количество изображений должно быть от 1 до 10"}}
+        
+        if width < 64 or height < 64 or width > 2048 or height > 2048:
+            return {"output": {"error": "Разрешение должно быть от 64x64 до 2048x2048"}}
+        
+        # Загрузка изображения
+        input_image = load_image_from_base64(image_base64)
+        
+        # Изменение размера изображения если нужно
+        if input_image.size != (width, height):
+            input_image = input_image.resize((width, height), Image.Resampling.LANCZOS)
+        
+        generated_images = []
+        seeds_used = []
+        
+        logger.info(f"Начинаем генерацию {num_images} изображений с промптом: {prompt}")
+        
+        # Генерация множественных изображений
+        for i in range(num_images):
+            seed = random.randint(0, 2**32 - 1)
+            torch.manual_seed(seed)
+            seeds_used.append(seed)
+            
+            result = pipeline(
+                image=input_image,
+                prompt=prompt,
+                guidance_scale=guidance_scale,
+                num_inference_steps=num_inference_steps
+            )
+            
+            generated_image = result.images[0]
+            generated_images.append(generated_image)
+        
+        # Конвертация всех изображений в base64
+        images_base64 = [image_to_base64(img) for img in generated_images]
+        
+        processing_time = time.time() - start_time
+        
+        return {
+            "output": {
+                "success": True,
+                "images_base64": images_base64,
+                "processing_time": processing_time,
+                "seeds_used": seeds_used
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка при генерации изображений: {e}")
+        return {
+            "output": {
+                "success": False,
+                "error": str(e),
+                "processing_time": time.time() - start_time
+            }
+        }
 
 @app.post("/generate", response_model=ImageEditResponse)
 async def generate_images(request: ImageEditRequest):
