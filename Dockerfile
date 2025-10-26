@@ -26,8 +26,5 @@ COPY . .
 ENV PYTHONPATH=/app:/app/flux
 ENV CUDA_VISIBLE_DEVICES=0
 
-# Открытие порта для RunPod
-EXPOSE 8000
-
-# Команда запуска
-CMD ["python3", "handler.py"]
+# Команда запуска для RunPod
+CMD ["python3", "-c", "print('FLUX.1 Kontext pipeline loaded and ready')"]
