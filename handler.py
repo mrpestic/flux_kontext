@@ -62,11 +62,12 @@ async def load_pipeline():
         if not hf_token:
             raise ValueError("HF_TOKEN не найден в переменных окружения")
         
-        # Используем официальный API FLUX
+        # Используем официальный API FLUX с оптимизацией памяти
         pipeline = FluxKontextPipeline.from_pretrained(
             "black-forest-labs/FLUX.1-Kontext-dev",
-            dtype=torch.bfloat16,
-            use_auth_token=hf_token
+            torch_dtype=torch.bfloat16,
+            use_auth_token=hf_token,
+            low_cpu_mem_usage=True
         )
         
         logger.info("Пайплайн успешно загружен!")
