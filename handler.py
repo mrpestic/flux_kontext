@@ -108,8 +108,6 @@ def handler(event):
 
         # Входная картинка (из base64 или пути/URL)
         init_img = _pick_input_image(inp)
-        if init_img.size != (width, height):
-            init_img = init_img.resize((width, height), Image.Resampling.LANCZOS)
 
         pipe = _load_pipeline_once()
 
@@ -121,8 +119,8 @@ def handler(event):
                 prompt=prompt,
                 num_inference_steps=steps,
                 guidance_scale=guidance,
-                width=width,
-                height=height
+                height=height,
+                width=width
             ).images[0]
             images.append(_image_to_b64(out))
 
