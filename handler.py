@@ -110,6 +110,9 @@ logger.info("✅ Пайплайн загружен в GPU память!")
 
 # Запускаем RunPod serverless
 if __name__ == "__main__":
+    import time
+    logger.info("⏳ Ждём 2 секунды для инициализации...")
+    time.sleep(2)  # Даём время на полную инициализацию GPU
     logger.info("🎯 Handler готов к работе, запускаем RunPod serverless...")
     runpod.serverless.start({"handler": handler})
 
