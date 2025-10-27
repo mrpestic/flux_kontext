@@ -103,10 +103,10 @@ pipeline = FluxKontextPipeline.from_pretrained(
 ).to("cuda")
 
 logger.info("✅ Пайплайн загружен в GPU память!")
-logger.info("🎯 Handler готов к работе, запускаем RunPod serverless...")
 
 # Запускаем RunPod serverless
 if __name__ == "__main__":
+    logger.info("🎯 Handler готов к работе, запускаем RunPod serverless...")
     runpod.serverless.start({"handler": handler})
 
 
