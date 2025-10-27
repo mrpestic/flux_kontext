@@ -89,16 +89,20 @@ def handler(event):
 
 # ЗАГРУЗКА ПАЙПЛАЙНА ПРИ ИМПОРТЕ МОДУЛЯ
 # Это выполнится ОДИН РАЗ при старте воркера
-logger.info("🚀 Загрузка FLUX.1 Kontext пайплайна...")
+logger.info("🚀 Загрузка FLUX.1 Kontext пайплайна из кэша...")
 hf_token = os.getenv("HF_TOKEN")
 if not hf_token:
     raise ValueError("HF_TOKEN не найден в переменных окружения")
 
-logger.info("📥 Загружаем модель в GPU...")
+cache_dir = os.getenv("HF_HOME", "/runpod-volume/.cache/huggingface")
+
+logger.info("📥 Загружаем модель из кэша в GPU...")
 pipeline = FluxKontextPipeline.from_pretrained(
     "black-forest-labs/FLUX.1-Kontext-dev",
     torch_dtype=torch.bfloat16,
     use_auth_token=hf_token,
+    cache_dir=cache_dir,
+    local_files_only=True,  # Только из кэша, без скачивания!
     low_cpu_mem_usage=True
 ).to("cuda")
 

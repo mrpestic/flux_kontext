@@ -19,5 +19,10 @@ if [ -n "$HF_TOKEN" ]; then
     huggingface-cli login --token "$HF_TOKEN" || true
 fi
 
-echo "🚀 Запускаем handler (пайплайн загрузится при импорте)..."
+# Предзагружаем пайплайн в кэш (только если не закэширован)
+echo "🚀 Проверяем кэш пайплайна..."
+python3 /app/preload.py
+
+# Запускаем handler (загрузит из кэша)
+echo "🎯 Запускаем handler..."
 python3 /app/handler.py
