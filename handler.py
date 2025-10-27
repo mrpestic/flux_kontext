@@ -120,7 +120,9 @@ def handler(event):
                 image=init_img,
                 prompt=prompt,
                 num_inference_steps=steps,
-                guidance_scale=guidance
+                guidance_scale=guidance,
+                width=width,
+                height=height
             ).images[0]
             images.append(_image_to_b64(out))
 
