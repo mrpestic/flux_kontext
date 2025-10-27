@@ -1,119 +1,139 @@
-import runpod
-import torch
-import base64
+# handler.py
+import os
 import io
+import time
+import base64
 import logging
 import random
-import os
+from typing import Optional
+from urllib.parse import urlparse
+from urllib.request import urlopen, Request
+
+import torch
 from PIL import Image
 from diffusers import FluxKontextPipeline
+import runpod
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Глобальный пайплайн - загружаем при импорте модуля
-pipeline = None
+# ---------- УТИЛИТЫ ----------
 
-def get_pipeline():
-    """Получаем предзагруженный пайплайн"""
-    global pipeline
-    if pipeline is None:
-        logger.error("❌ Пайплайн не загружен!")
-        raise RuntimeError("Pipeline not initialized")
-    return pipeline
+def _b64_to_image(b64: str) -> Image.Image:
+    if "," in b64:
+        b64 = b64.split(",", 1)[1]
+    img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+    return img
 
-def load_image_from_base64(image_base64: str) -> Image.Image:
-    """Загрузка изображения из base64"""
-    if ',' in image_base64:
-        image_base64 = image_base64.split(',')[1]
-    image_data = base64.b64decode(image_base64)
-    image = Image.open(io.BytesIO(image_data))
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
-    return image
+def _load_image_from_path_or_url(path_or_url: str) -> Image.Image:
+    parsed = urlparse(path_or_url)
+    if parsed.scheme in ("http", "https"):
+        req = Request(path_or_url, headers={"User-Agent": "RunPod/Serverless"})
+        with urlopen(req, timeout=30) as resp:
+            data = resp.read()
+        return Image.open(io.BytesIO(data)).convert("RGB")
+    # локальный путь
+    with open(path_or_url, "rb") as f:
+        data = f.read()
+    return Image.open(io.BytesIO(data)).convert("RGB")
 
-def image_to_base64(image: Image.Image) -> str:
-    """Конвертация изображения в base64"""
-    buffer = io.BytesIO()
-    image.save(buffer, format='PNG')
-    return base64.b64encode(buffer.getvalue()).decode()
+def _pick_input_image(inp: dict) -> Image.Image:
+    """
+    Поддерживает и image_base64, и image_path (URL/локальный путь).
+    """
+    if "image_base64" in inp and inp["image_base64"]:
+        return _b64_to_image(inp["image_base64"])
+    if "image_path" in inp and inp["image_path"]:
+        return _load_image_from_path_or_url(inp["image_path"])
+    raise ValueError("Нужно передать image_base64 или image_path")
+
+def _image_to_b64(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+# ---------- ГЛОБАЛЬНАЯ МОДЕЛЬ (ГРУЗИМ ПРИ СТАРТЕ ВОРКЕРА) ----------
+
+PIPELINE: Optional[FluxKontextPipeline] = None
+
+def _load_pipeline_once() -> FluxKontextPipeline:
+    global PIPELINE
+    if PIPELINE is not None:
+        return PIPELINE
+
+    model_id = "black-forest-labs/FLUX.1-Kontext-dev"
+    cache_dir = os.getenv("HF_HOME", "/runpod-volume/.cache/huggingface")
+
+    logger.info("🚀 Загрузка FLUX.1-Kontext пайплайна из кэша (инициализация воркера)...")
+    try:
+        # Важно: не передаём use_auth_token (он игнорируется в этой реализации),
+        # аутентификация идёт через окружение/логин.
+        PIPELINE = FluxKontextPipeline.from_pretrained(
+            model_id,
+            dtype=torch.float16,         # вместо torch_dtype
+            cache_dir=cache_dir,
+            local_files_only=True,       # ТОЛЬКО из кэша; качали в preload.py
+            low_cpu_mem_usage=True
+        ).to("cuda")
+        torch.set_grad_enabled(False)
+        logger.info("✅ Пайплайн загружен в GPU.")
+        return PIPELINE
+    except Exception as e:
+        # Если кэш почему-то пуст — лучше упасть явной ошибкой, чем качать в задаче (чтобы не было биллинга на загрузку)
+        logger.exception("❌ Не удалось загрузить пайплайн из кэша. Убедись, что preload прошёл успешно.")
+        raise
+
+# Инициализация при старте воркера (cold start), до получения задач
+PIPELINE = _load_pipeline_once()
+
+# ---------- RUNPOD HANDLER ----------
 
 def handler(event):
-    """Основной handler для RunPod"""
-    import time
-    start_time = time.time()
-    
+    t0 = time.time()
     try:
-        input_data = event.get("input", {})
-        image_base64 = input_data.get("image_base64")
-        prompt = input_data.get("prompt")
-        num_images = input_data.get("num_images", 1)
-        width = input_data.get("width", 1024)
-        height = input_data.get("height", 1024)
-        guidance_scale = input_data.get("guidance_scale", 2.5)
-        num_inference_steps = input_data.get("num_inference_steps", 20)
-        
-        # Получаем предзагруженный пайплайн
-        pipe = get_pipeline()
-        
-        # Загрузка и обработка изображения
-        input_image = load_image_from_base64(image_base64)
-        if input_image.size != (width, height):
-            input_image = input_image.resize((width, height), Image.Resampling.LANCZOS)
-        
-        generated_images = []
-        for i in range(num_images):
-            seed = random.randint(0, 2**32 - 1)
-            torch.manual_seed(seed)
-            result = pipe(
-                image=input_image,
+        inp = event.get("input")
+        if not isinstance(inp, dict):
+            return {"error": "payload должен содержать поле 'input' с параметрами"}
+
+        prompt = inp.get("prompt")
+        if not prompt:
+            return {"error": "нужно поле 'prompt' (строка)"}
+
+        # Параметры с дефолтами
+        num_images = int(inp.get("num_images", 1))
+        steps = int(inp.get("num_inference_steps", 20))
+        guidance = float(inp.get("guidance_scale", inp.get("guidance", 2.5)))
+        width = int(inp.get("width", 1024))
+        height = int(inp.get("height", 1024))
+
+        # Входная картинка (из base64 или пути/URL)
+        init_img = _pick_input_image(inp)
+        if init_img.size != (width, height):
+            init_img = init_img.resize((width, height), Image.Resampling.LANCZOS)
+
+        pipe = _load_pipeline_once()
+
+        images = []
+        for _ in range(num_images):
+            torch.manual_seed(random.randint(0, 2**32 - 1))
+            out = pipe(
+                image=init_img,
                 prompt=prompt,
-                guidance_scale=guidance_scale,
-                num_inference_steps=num_inference_steps
-            )
-            generated_images.append(result.images[0])
-        
-        images_base64 = [image_to_base64(img) for img in generated_images]
-        
+                num_inference_steps=steps,
+                guidance_scale=guidance
+            ).images[0]
+            images.append(_image_to_b64(out))
+
         return {
             "output": {
                 "success": True,
-                "images_base64": images_base64,
-                "processing_time": time.time() - start_time
+                "images_base64": images,
+                "elapsed": time.time() - t0
             }
         }
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.exception("❌ Ошибка выполнения handler")
         return {"output": {"error": str(e)}}
 
-
-# ЗАГРУЗКА ПАЙПЛАЙНА ПРИ ИМПОРТЕ МОДУЛЯ
-# Это выполнится ОДИН РАЗ при старте воркера
-logger.info("🚀 Загрузка FLUX.1 Kontext пайплайна из кэша...")
-hf_token = os.getenv("HF_TOKEN")
-if not hf_token:
-    raise ValueError("HF_TOKEN не найден в переменных окружения")
-
-cache_dir = os.getenv("HF_HOME", "/runpod-volume/.cache/huggingface")
-
-logger.info("📥 Загружаем модель из кэша в GPU...")
-pipeline = FluxKontextPipeline.from_pretrained(
-    "black-forest-labs/FLUX.1-Kontext-dev",
-    torch_dtype=torch.bfloat16,
-    use_auth_token=hf_token,
-    cache_dir=cache_dir,
-    local_files_only=True,  # Только из кэша, без скачивания!
-    low_cpu_mem_usage=True
-).to("cuda")
-
-logger.info("✅ Пайплайн загружен в GPU память!")
-
-# Запускаем RunPod serverless
-if __name__ == "__main__":
-    import time
-    logger.info("⏳ Ждём 2 секунды для инициализации...")
-    time.sleep(2)  # Даём время на полную инициализацию GPU
-    logger.info("🎯 Handler готов к работе, запускаем RunPod serverless...")
-    runpod.serverless.start({"handler": handler})
-
-
+# Запуск serverless-воркера (важно вызывать без условий)
+runpod.serverless.start({"handler": handler})
