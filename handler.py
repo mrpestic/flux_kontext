@@ -101,8 +101,8 @@ def handler(event):
 
         # Параметры с дефолтами
         num_images = int(inp.get("num_images", 1))
-        steps = int(inp.get("num_inference_steps", 20))
-        guidance = float(inp.get("guidance_scale", inp.get("guidance", 2.5)))
+        steps = int(inp.get("num_inference_steps", 28))  # FLUX оптимизирован для 28 шагов
+        guidance = float(inp.get("guidance_scale", inp.get("guidance", 3.5)))  # FLUX использует 3.5
         width = int(inp.get("width", 1024))
         height = int(inp.get("height", 1024))
 
